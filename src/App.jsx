@@ -319,9 +319,9 @@ export default function App() {
                                 lineHeight: 1.6,
                             }}
                         >
-                            Click to browse or drag and drop your save file here.
+                            Click to browse or drag and drop
                             <br/>
-                            Supports .srm and .sav formats.
+                            .srm and .sav supported
                         </div>
                     </div>
                 ) : (
