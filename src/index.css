@@ -1,0 +1,69 @@
+@import url("https://fonts.googleapis.com/css2?family=DotGothic16&display=swap");
+
+:root {
+  --gb-darkest: #0f380f;
+  --gb-dark: #3a7a3a;
+  --gb-light: #a0c820;
+  --gb-lightest: #c0e040;
+  --gb-mid: #5a8a3a;
+  --gb-bg: #0a2a0a;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  min-height: 100vh;
+  background: var(--gb-bg);
+}
+
+body {
+  font-family: "DotGothic16", monospace;
+  color: var(--gb-lightest);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+}
+
+/* Scanline overlay on the whole page */
+#root::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.08) 2px,
+    rgba(0, 0, 0, 0.08) 4px
+  );
+  z-index: 999;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--gb-darkest);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--gb-dark);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gb-mid);
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  filter: invert(1) hue-rotate(80deg);
+}
+
+p {
+  margin-bottom: 8px;
+}
