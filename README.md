@@ -6,7 +6,7 @@ level, and save it back.
 
 ## Usage
 
-1. Open the editor (hosted on [GitHub Pages](https://brandonkowalski.github.io/rosy-retrospective-score-editor/) or run
+1. Open the editor (hosted on [GitHub Pages](https://brandonkowalski.github.io/rosy-retrospective-save-editor/) or run
    locally)
 2. Load your `.srm` or `.sav` file by clicking the upload area or dragging it in
 3. Switch between **TYPE-A** and **TYPE-B** tabs to find the level you want to edit
