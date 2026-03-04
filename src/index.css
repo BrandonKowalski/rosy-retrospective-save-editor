@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=DotGothic16&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap");
 
 :root {
   --gb-darkest: #0f380f;
@@ -25,6 +25,10 @@ body {
   color: var(--gb-lightest);
   -webkit-font-smoothing: none;
   -moz-osx-font-smoothing: unset;
+}
+
+.header-text {
+  font-family: "Press Start 2P", monospace !important;
 }
 
 /* Scanline overlay on the whole page */

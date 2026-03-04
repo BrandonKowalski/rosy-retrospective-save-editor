@@ -4,11 +4,19 @@ A web-based editor for modifying high scores in [Tetris Rosy Retrospection](http
 Game Boy ROM hack of the original Tetris. Load your emulator's `.srm` save file, edit the top-3 names and scores for any
 level, and save it back.
 
+## Features
+
+- **Edit scores and names** for all Type-A and Type-B levels
+- **Multi-file merge** — drop multiple save files at once to combine the top 3 highest scores per level across all files
+- **RetroArch RZIP support** — automatically decompresses RetroArch's compressed `.srm` format
+- **Editable filename** — rename the output file before saving
+
 ## Usage
 
 1. Open the editor (hosted on [GitHub Pages](https://brandonkowalski.github.io/rosy-retrospective-save-editor/) or run
    locally)
 2. Load your `.srm` or `.sav` file by clicking the upload area or dragging it in
+   - Drop multiple files to merge the best scores from each
 3. Switch between **TYPE-A** and **TYPE-B** tabs to find the level you want to edit
 4. Edit names (A-Z, up to 6 characters) and scores (max 999,999)
 5. Click **SAVE .SRM** to download the modified file

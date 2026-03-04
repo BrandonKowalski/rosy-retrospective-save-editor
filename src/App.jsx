@@ -1,5 +1,155 @@
-import {useCallback, useRef, useState} from "react";
-import {buildSRM, parseSRM} from "./srm.js";
+import {useCallback, useEffect, useRef, useState} from "react";
+import {buildSRM, mergeGroups, parseSRM} from "./srm.js";
+
+// Standard tetromino shapes
+const BLOCK_SHAPES = [
+    [[1, 1, 1, 1]],                     // I
+    [[1, 1], [1, 1]],                   // O
+    [[0, 1, 0], [1, 1, 1]],             // T
+    [[0, 1, 1], [1, 1, 0]],             // S
+    [[1, 1, 0], [0, 1, 1]],             // Z
+    [[1, 0, 0], [1, 1, 1]],             // J
+    [[0, 0, 1], [1, 1, 1]],             // L
+];
+
+const BLOCK_COLORS = [
+    "rgba(58, 122, 58, 0.12)",
+    "rgba(90, 138, 58, 0.10)",
+    "rgba(160, 200, 32, 0.06)",
+    "rgba(15, 56, 15, 0.15)",
+];
+
+function rotateShape(shape) {
+    const rows = shape.length;
+    const cols = shape[0].length;
+    const rotated = [];
+    for (let c = 0; c < cols; c++) {
+        const newRow = [];
+        for (let r = rows - 1; r >= 0; r--) {
+            newRow.push(shape[r][c]);
+        }
+        rotated.push(newRow);
+    }
+    return rotated;
+}
+
+function FallingBlocks() {
+    const canvasRef = useRef(null);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d");
+        let animId;
+        let blocks = [];
+
+        const resize = () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        };
+        resize();
+        window.addEventListener("resize", resize);
+
+        const CELL = 18;
+        const GAP = 2; // minimum gap in cells between pieces
+        const SPEED = 0.4;
+        const SPAWN_INTERVAL = 1200;
+        let lastSpawn = 0;
+
+        // Build a set of occupied columns near the top of the screen
+        const getOccupiedCells = () => {
+            const occupied = new Set();
+            for (const b of blocks) {
+                if (b.y > CELL * 6) continue; // only check blocks near top
+                for (let r = 0; r < b.shape.length; r++) {
+                    for (let c = 0; c < b.shape[r].length; c++) {
+                        if (b.shape[r][c]) {
+                            const gy = Math.round((b.y + r * CELL) / CELL);
+                            // Add the cell and surrounding gap cells
+                            for (let dx = -GAP; dx <= GAP; dx++) {
+                                for (let dy = -GAP; dy <= GAP; dy++) {
+                                    occupied.add(`${b.gx + c + dx},${gy + dy}`);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return occupied;
+        };
+
+        const spawnBlock = () => {
+            let shape = BLOCK_SHAPES[Math.floor(Math.random() * BLOCK_SHAPES.length)];
+            const rotations = Math.floor(Math.random() * 4);
+            for (let i = 0; i < rotations; i++) shape = rotateShape(shape);
+            const color = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
+            const cols = shape[0].length;
+            const rows = shape.length;
+            const maxGx = Math.floor(canvas.width / CELL) - cols;
+            const gx = Math.floor(Math.random() * (maxGx + 1));
+            const gy = -rows;
+
+            const occupied = getOccupiedCells();
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (shape[r][c] && occupied.has(`${gx + c},${gy + r}`)) return;
+                }
+            }
+
+            blocks.push({
+                x: gx * CELL,
+                y: gy * CELL,
+                gx,
+                speed: SPEED,
+                shape,
+                color,
+            });
+        };
+
+        const draw = (timestamp) => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (timestamp - lastSpawn > SPAWN_INTERVAL) {
+                spawnBlock();
+                lastSpawn = timestamp;
+            }
+
+            blocks = blocks.filter((b) => b.y < canvas.height + CELL * 4);
+
+            for (const b of blocks) {
+                b.y += b.speed;
+                ctx.fillStyle = b.color;
+                for (let r = 0; r < b.shape.length; r++) {
+                    for (let c = 0; c < b.shape[r].length; c++) {
+                        if (b.shape[r][c]) {
+                            ctx.fillRect(b.x + c * CELL, b.y + r * CELL, CELL - 1, CELL - 1);
+                        }
+                    }
+                }
+            }
+
+            animId = requestAnimationFrame(draw);
+        };
+
+        animId = requestAnimationFrame(draw);
+
+        return () => {
+            cancelAnimationFrame(animId);
+            window.removeEventListener("resize", resize);
+        };
+    }, []);
+
+    return (
+        <canvas
+            ref={canvasRef}
+            style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 0,
+                pointerEvents: "none",
+            }}
+        />
+    );
+}
 
 function ScoreEntry({entry, onChange, rank}) {
     const inputStyle = {
@@ -136,32 +286,58 @@ export default function App() {
 
     const loaded = rawData !== null;
 
-    const loadFile = useCallback((buffer, name) => {
-        const {typeA: a, typeB: b, raw} = parseSRM(buffer);
+    const loadFiles = useCallback(async (buffers, names) => {
+        const parsed = await Promise.all(buffers.map((buf) => parseSRM(buf)));
+        let a, b, raw;
+        if (parsed.length === 1) {
+            ({typeA: a, typeB: b, raw} = parsed[0]);
+        } else {
+            a = mergeGroups(parsed.map((p) => p.typeA));
+            b = mergeGroups(parsed.map((p) => p.typeB));
+            raw = parsed[0].raw;
+        }
         setRawData(raw);
         setTypeA(a);
         setTypeB(b);
-        setFileName(name);
-        setDirty(false);
+        setFileName(parsed.length === 1 ? names[0] : "Merged.srm");
+        setDirty(parsed.length > 1);
     }, []);
 
     const handleUpload = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => loadFile(ev.target.result, file.name);
-        reader.readAsArrayBuffer(file);
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+        Promise.all(
+            files.map(
+                (f) =>
+                    new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => resolve({buffer: ev.target.result, name: f.name});
+                        reader.readAsArrayBuffer(f);
+                    })
+            )
+        ).then((results) => {
+            loadFiles(results.map((r) => r.buffer), results.map((r) => r.name));
+        });
         e.target.value = "";
     };
 
     const handleDrop = (e) => {
         e.preventDefault();
         setDragging(false);
-        const file = e.dataTransfer.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => loadFile(ev.target.result, file.name);
-        reader.readAsArrayBuffer(file);
+        const files = Array.from(e.dataTransfer.files);
+        if (!files.length) return;
+        Promise.all(
+            files.map(
+                (f) =>
+                    new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => resolve({buffer: ev.target.result, name: f.name});
+                        reader.readAsArrayBuffer(f);
+                    })
+            )
+        ).then((results) => {
+            loadFiles(results.map((r) => r.buffer), results.map((r) => r.name));
+        });
     };
 
     const handleDragOver = (e) => {
@@ -223,9 +399,13 @@ export default function App() {
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
+                justifyContent: "center",
                 padding: "32px 16px",
+                position: "relative",
+                zIndex: 1,
             }}
         >
+            <FallingBlocks />
             <a
                 href="https://github.com/BrandonKowalski/rosy-retrospective-save-editor"
                 target="_blank"
@@ -249,25 +429,27 @@ export default function App() {
             </a>
             <header style={{textAlign: "center", maxWidth: 520, width: "100%"}}>
                 <div
+                    className="header-text"
                     style={{
-                        fontSize: 15,
-                        letterSpacing: 4,
+                        fontSize: 14,
+                        letterSpacing: 3,
                         color: "var(--gb-mid)",
-                        marginBottom: 2,
+                        marginBottom: 6,
                     }}
                 >
                     TETRIS ROSY RETROSPECTION
                 </div>
                 <h1
+                    className="header-text"
                     style={{
-                        fontSize: 30,
-                        letterSpacing: 3,
+                        fontSize: 28,
+                        letterSpacing: 2,
                         color: "var(--gb-light)",
                         textShadow: "0 0 24px rgba(160,200,32,0.3)",
                         fontWeight: "normal",
                     }}
                 >
-                    HIGH SCORE EDITOR
+                    SAVE EDITOR
                 </h1>
                 <div
                     style={{
@@ -282,6 +464,7 @@ export default function App() {
                     ref={fileRef}
                     type="file"
                     accept=".srm,.sav"
+                    multiple
                     onChange={handleUpload}
                     style={{display: "none"}}
                 />
@@ -305,21 +488,21 @@ export default function App() {
                     >
                         <div
                             style={{
-                                fontSize: 20,
+                                fontSize: 24,
                                 color: "var(--gb-light)",
                                 marginBottom: 12,
                             }}
                         >
-                            LOAD .SRM FILE
+                            LOAD SAVE FILE
                         </div>
                         <div
                             style={{
-                                fontSize: 15,
+                                fontSize: 20,
                                 color: "var(--gb-mid)",
                                 lineHeight: 1.6,
                             }}
                         >
-                            Click to browse or drag and drop
+                            Drop one file to edit, or multiple to merge
                             <br/>
                             .srm and .sav supported
                         </div>
@@ -357,16 +540,27 @@ export default function App() {
                         >
                             {dirty ? "\u2605 SAVE .SRM" : "SAVE .SRM"}
                         </button>
-                        <div
+                        <input
+                            type="text"
+                            value={fileName}
+                            onChange={(e) => setFileName(e.target.value)}
                             style={{
                                 width: "100%",
                                 fontSize: 15,
                                 color: "var(--gb-mid)",
                                 marginTop: 4,
+                                background: "none",
+                                border: "1px solid transparent",
+                                borderRadius: 4,
+                                padding: "4px 6px",
+                                fontFamily: "'DotGothic16', monospace",
+                                textAlign: "center",
+                                outline: "none",
+                                transition: "border-color 0.15s",
                             }}
-                        >
-                            {fileName}
-                        </div>
+                            onFocus={(e) => (e.target.style.borderColor = "var(--gb-dark)")}
+                            onBlur={(e) => (e.target.style.borderColor = "transparent")}
+                        />
                     </div>
                 )}
             </header>
@@ -460,13 +654,13 @@ export default function App() {
                 <p>
                     Be smart, take a backup before editing.
                 </p>
-                <p>
-                    Made with &hearts; in Ithaca, NY
-                </p>
                 <p style={{fontSize: 12, fontWeight: "bold"}}>
                     Not affiliated with or endorsed by The Tetris Company.
                 </p>
             </footer>
+            <div style={{fontSize: 11, color: "var(--gb-mid)", opacity: 0.4, marginTop: 8}}>
+                {__GIT_HASH__}
+            </div>
         </div>
     );
 }

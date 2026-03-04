@@ -93,9 +93,47 @@ export function writeGroup(data, offset, entries) {
   }
 }
 
-// Parse entire .srm into structured data
-export function parseSRM(buffer) {
-  const data = new Uint8Array(buffer);
+// RetroArch RZIP magic: "#RZIPv"
+const RZIP_MAGIC = [0x23, 0x52, 0x5a, 0x49, 0x50, 0x76];
+
+function isRZIP(data) {
+  return RZIP_MAGIC.every((b, i) => data[i] === b);
+}
+
+// Decompress RetroArch RZIP-wrapped save file
+// Format: 8-byte header, 4-byte chunk size (unused), 8-byte full content size,
+//         then chunks of [4-byte compressed length + zlib data]
+async function decompressRZIP(data) {
+  // Chunk header starts at offset 20: 4-byte LE compressed size
+  const chunkSize = data[20] | (data[21] << 8) | (data[22] << 16) | (data[23] << 24);
+  const compressed = data.slice(24, 24 + chunkSize);
+  const ds = new DecompressionStream("deflate");
+  const writer = ds.writable.getWriter();
+  writer.write(compressed);
+  writer.close();
+  const reader = ds.readable.getReader();
+  const chunks = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  const totalLen = chunks.reduce((s, c) => s + c.length, 0);
+  const result = new Uint8Array(totalLen);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+}
+
+// Parse entire .srm into structured data (handles RZIP-compressed files)
+export async function parseSRM(buffer) {
+  let data = new Uint8Array(buffer);
+  if (isRZIP(data)) {
+    data = await decompressRZIP(data);
+  }
 
   const typeA = [];
   for (let i = 0; i < TYPE_A_GROUPS; i++) {
@@ -108,6 +146,18 @@ export function parseSRM(buffer) {
   }
 
   return { typeA, typeB, raw: data };
+}
+
+// Merge multiple group arrays by keeping the top 3 scores per group index
+export function mergeGroups(groupsArray) {
+  const groupCount = groupsArray[0].length;
+  const merged = [];
+  for (let i = 0; i < groupCount; i++) {
+    const allEntries = groupsArray.flatMap((groups) => groups[i]);
+    allEntries.sort((a, b) => b.score - a.score);
+    merged.push(allEntries.slice(0, 3));
+  }
+  return merged;
 }
 
 // Serialize structured data back to .srm bytes
