@@ -154,8 +154,18 @@ export function mergeGroups(groupsArray) {
   const merged = [];
   for (let i = 0; i < groupCount; i++) {
     const allEntries = groupsArray.flatMap((groups) => groups[i]);
-    allEntries.sort((a, b) => b.score - a.score);
-    merged.push(allEntries.slice(0, 3));
+    // Deduplicate identical score+name pairs
+    const seen = new Set();
+    const unique = allEntries.filter((e) => {
+      const key = `${e.name}|${e.score}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    unique.sort((a, b) => b.score - a.score);
+    const top = unique.slice(0, 3);
+    while (top.length < 3) top.push({score: 0, name: "      "});
+    merged.push(top);
   }
   return merged;
 }
